@@ -1,6 +1,9 @@
 ![Vector](vector.jpg)
+
 ![Keras](keras_logo.png)
+
 ![Image-Net](image-net.jpg)
+
 
 # Anki-Vector SDK with Keras neural network and Image-Net database
 
