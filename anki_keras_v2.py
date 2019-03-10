@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
 
 """
-
+This script uses Anki Vector's camera to take a photo and perform
+image recognition with Keras built in ResNet50 neural network and
+the Image-Net database.
 """
 
 import os
+import random
 import sys
 import time
-import random
-
-try:
-    from PIL import Image
-except ImportError:
-    sys.exit('Cannot import from PIL: Do `pip3 install '
-             '--user Pillow` to install')
 
 import anki_vector
 
@@ -22,16 +18,55 @@ from keras.preprocessing import image
 
 import numpy as np
 
-# Load the ResNet50 model
+try:
+    from PIL import Image
+except ImportError:
+    sys.exit('Cannot import from PIL: Do `pip3 install '
+             '--user Pillow` to install')
+
+
+# Load the ResNet50 model from Keras
 resnet_model = resnet50.ResNet50(weights='imagenet')
 
-robot = anki_vector.Robot(anki_vector.util.parse_command_args().serial, enable_camera_feed=True)
+# setup robot object
+robot = anki_vector.Robot(anki_vector.util.parse_command_args().
+                          serial, enable_camera_feed=True)
 screen_dimensions = anki_vector.screen.SCREEN_WIDTH, anki_vector.screen.SCREEN_HEIGHT
+# define the path where this script it
 current_directory = os.path.dirname(os.path.realpath(__file__))
+# check for resources folder and creat it if necessary
+image_path = os.path.join(current_directory, 'resources')
+if not os.path.exists(image_path):
+    os.makedirs(image_path)
+# path to find the image later
 image_file = os.path.join(current_directory, 'resources', "latest.jpg")
 
 
+def format_picture(image_file):
+    '''
+    ResNet50 takes images of 224x224 pixels. By using parameters
+    'target_size=(224, 224)' the wide angle image on Vector is
+    squished making the image recognition more difficult, this
+    changes the image into the appropriate size ahead of time
+    by cropping to the center of the image.
+    '''
+    print('formatting picture')
+    im = Image.open(image_file)
+    width, height = im.size   # Get dimensions
+
+    left = (width - 224)/2
+    top = (height - 224)/2
+    right = (width + 224)/2
+    bottom = (height + 224)/2
+
+    im = im.crop((left, top, right, bottom))
+    im.save(image_file)
+
+
 def detect_labels(path):
+    '''
+    The image recogition function using Keras and Image-Net.
+    '''
     # resnet_model = resnet50.ResNet50(weights='imagenet')
     print('Detect labels, image = {}'.format(path))
 
@@ -41,7 +76,7 @@ def detect_labels(path):
 
     # Load the image file, resizing it to 224x224
     # pixels (required by this model)
-    img = image.load_img(path, target_size=(224, 224))
+    img = image.load_img(path)
 
     # Convert the image to a numpy array
     x = image.img_to_array(img)
@@ -57,15 +92,14 @@ def detect_labels(path):
 
     # Look up the names of the predicted classes. Index zero
     # is the results for the first image.
-    predicted_classes = resnet50.decode_predictions(predictions, top=1)
+    predicted_classes = resnet50.decode_predictions(predictions, top=3)
 
-    print("This is an image of:")
+    robot_say("My top three guesses are")
 
     for imagenet_id, name, likelihood in predicted_classes[0]:
-        print(" - {}: {:2f} likelihood".format(name, likelihood))
-        name = name.format(name)
-        print('this is the ' + name)
-        return ("{}".format(name))
+        # robot_say("{}: {:2f} likelihood".format(name, likelihood))
+        robot_say("{}".format(name))
+        time.sleep(1)
 
 
 def connect_robot():
@@ -81,6 +115,7 @@ def disconnect_robot():
 def stand_by():
     # If necessary, move Vector's Head and Lift to make it easy to see his face
     robot.behavior.set_lift_height(0.0)
+    robot.behavior.set_head_angle(anki_vector.util.degrees(6.0))
 
 
 def show_camera():
@@ -121,28 +156,29 @@ def robot_say(text):
 def analyze():
     stand_by()
     show_camera()
-    robot_say('My lord, I found something interesting. Give me 5 seconds.')
-    time.sleep(5)
+    robot_say('What is that...?')
+    time.sleep(1)
 
-    robot_say('Prepare to take a photo')
-    robot_say('3')
+    show_image(image_file)
     time.sleep(1)
-    robot_say('2')
-    time.sleep(1)
-    robot_say('1')
-    robot_say('Cheers')
 
     save_image(image_file)
+    time.sleep(1)
+
+    format_picture(image_file)
+
+    robot_say('Hang on, let me think about this for a minute.')
+    detect_labels(image_file)
+    time.sleep(1)
+
     show_image(image_file)
     time.sleep(1)
 
-    robot_say('Start to analyze the object')
-    text = detect_labels(image_file)
-    show_image(image_file)
-    robot_say('Might be {}'.format(text))
+    robot_say('Then again, I\'m not too smart.')
 
     close_camera()
-    robot_say('Over, goodbye!')
+
+    robot_say('Goodbye!')
 
 
 def main():
